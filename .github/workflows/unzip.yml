@@ -1,0 +1,47 @@
+name: Unzip project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract project
+        run: |
+          set -e
+          echo "Files in repository root:"
+          ls -la
+          ZIP=$(ls -t *.zip 2>/dev/null | head -n 1 || true)
+          if [ -z "$ZIP" ]; then
+            echo "::error::No .zip file found in the repository root."
+            exit 1
+          fi
+          echo "Using: $ZIP"
+          rm -rf /tmp/extract && mkdir -p /tmp/extract
+          unzip -o -q "$ZIP" -d /tmp/extract
+          SRC=$(find /tmp/extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          if [ -z "$SRC" ]; then
+            echo "::error::The zip has no project folder inside."
+            exit 1
+          fi
+          rm -rf "$SRC/.github"
+          cp -a "$SRC"/. .
+          rm -f -- "$ZIP"
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Extract project zip"
+            git push
+          fi
